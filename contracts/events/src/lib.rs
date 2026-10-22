@@ -240,10 +240,13 @@ pub fn emit_run_prepared(e: &Env, run_id: u64, total_spend: i128) {
 }
 
 /// Emitted when a pending payroll run is cancelled.
-pub fn emit_run_cancelled(e: &Env, run_id: u64, total_amount: i128) {
+///
+/// The payload deliberately contains only the run ID and cancelling admin.
+/// It excludes amounts, employee counts, draft hashes, and free-form reasons.
+pub fn emit_run_cancelled(e: &Env, run_id: u64, cancelled_by: Address) {
     e.events().publish(
         (payroll_topic(), Symbol::new(e, "run_cancelled")),
-        (run_id, total_amount),
+        (run_id, cancelled_by),
     );
 }
 
