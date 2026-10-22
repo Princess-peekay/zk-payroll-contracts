@@ -1485,3 +1485,35 @@ fn test_prune_expired_view_key_before_expiry_fails() {
     assert_eq!(result.unwrap_err().unwrap(), AuditError::KeyExpired);
     assert!(client.try_get_view_key(&auditor).is_ok());
 }
+
+
+#[test]
+fn delegated_grant_cannot_expand_past_issuance_expiry() {
+    let (env, contract_id) = setup();
+    let client = AuditModuleClient::new(&env, &contract_id);
+    let auditor = soroban_sdk::Address::generate(&env);
+    let delegate = soroban_sdk::Address::generate(&env);
+    let seq = env.ledger().sequence();
+    let admin = contract_id.clone();
+
+    client.generate_view_key(&auditor, &(seq + 1_000));
+    client.set_delegation_policy(
+        &admin,
+        &auditor,
+        &true,
+        &AuditScope::FullCompany,
+        &(seq + 1_000),
+    );
+    client.delegate_view_key(&auditor, &delegate, &AuditScope::EmployeeList, &(seq + 500));
+
+    let result = client.try_extend_delegated_access(&auditor, &delegate, &(seq + 600));
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        AuditError::DelegationExceedsParentExpiry
+    );
+    assert_eq!(
+        client.get_expiration(&delegate).unwrap(),
+        seq + 500,
+        "a rejected extension must preserve the issued expiry"
+    );
+}
