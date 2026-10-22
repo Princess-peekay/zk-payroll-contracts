@@ -1774,12 +1774,12 @@ mod tests {
             let commitment = BytesN::from_array(&env, &[i; 32]);
             client.store_commitment(&employee, &commitment);
             employees.push_back(employee);
-            assert!(client.is_commitment_active(&employees.last().unwrap()));
+            assert!(client.is_commitment_active(&employees.get(employees.len() - 1).unwrap()));
         }
 
         // Collision at the upper boundary is rejected without changing the
         // existing employee's commitment.
-        let last_employee = employees.last().unwrap();
+        let last_employee = employees.get(employees.len() - 1).unwrap();
         let last_commitment = BytesN::from_array(&env, &[64u8; 32]);
         let collision_employee = Address::generate(&env);
         assert!(client
