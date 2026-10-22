@@ -1509,7 +1509,7 @@ fn delegated_grant_cannot_expand_past_issuance_expiry() {
     let result = client.try_extend_delegated_access(&auditor, &delegate, &(seq + 600));
     assert_eq!(
         result.unwrap_err().unwrap(),
-        AuditError::DelegationExceedsParentExpiry
+        AuditError::GrantExpansionNotAllowed
     );
     assert_eq!(
         client.get_expiration(&delegate).unwrap(),
