@@ -57,6 +57,8 @@ pub enum AuditError {
     InvalidEventSequence = 19,
     /// A delegate address already has a grant with a conflicting scope.
     ConflictingGrant = 20,
+    /// An issued delegated grant cannot be expanded; issue a new grant instead.
+    GrantExpansionNotAllowed = 21,
 }
 
 // ---------------------------------------------------------------------------
@@ -672,7 +674,7 @@ impl AuditModule {
         // its parent later refreshes their own key, that must not silently
         // enlarge a grant already issued to this delegate.
         if new_expiration_ledger > record.max_expiration_ledger {
-            return Err(AuditError::DelegationExceedsParentExpiry);
+            return Err(AuditError::GrantExpansionNotAllowed);
         }
         if new_expiration_ledger > parent.max_expiration_ledger
             || new_expiration_ledger > parent.expiration_ledger
