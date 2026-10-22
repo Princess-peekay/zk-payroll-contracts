@@ -548,3 +548,17 @@ Off-chain clients can call `dry_run_batch_process_payroll` before submitting a r
 | [CONTRIBUTING.md](../CONTRIBUTING.md) | Full contributor setup, pre-commit hooks, ZK ceremony |
 | [docs/troubleshooting-soroban-build.md](../docs/troubleshooting-soroban-build.md) | Build and optimize failures |
 | [docs/deployment-verification.md](../docs/deployment-verification.md) | Post-deploy smoke tests using `$NETWORK` / `$SOURCE` |
+
+
+## Latest approved payroll revision query (issue #864)
+
+The registry exposes get_latest_approved_payroll_revision(company_id) as a
+read-only metadata query. It returns None until a revision has been recorded,
+then returns the latest monotonically increasing revision number, approval
+timestamp, and approving company admin. Only the active company admin may
+record a non-zero revision, and stale or repeated revision numbers are rejected.
+
+The query is deliberately privacy-safe: it does not return employee identities,
+salary amounts, commitments, or payroll row data. Integrators should treat the
+revision as a change-detection pointer, not as a replacement for the payroll
+contract's approval workflow.
