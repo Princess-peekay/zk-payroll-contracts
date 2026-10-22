@@ -287,6 +287,30 @@ pub use payout_ordering_validation::{
     MAX_ORDERING_SIZE,
 };
 
+/// Contract payment asset compatibility validation (#646).
+pub mod payment_asset_compatibility;
+pub use payment_asset_compatibility::{
+    PaymentAssetCompatibility, PaymentAssetCompatibilityError, PaymentAssetKey,
+    MAX_PAYMENT_ASSET_DECIMALS,
+};
+
+/// Contract draft payroll approval snapshot locking (#648).
+pub mod draft_approval_snapshot;
+pub use draft_approval_snapshot::{DraftApprovalSnapshot, DraftSnapshotError, DraftSnapshotKey};
+
+/// Contract payroll reference integrity validation (#649).
+pub mod payroll_reference_integrity;
+pub use payroll_reference_integrity::{
+    DraftReferenceIntegrity, PayrollReferenceError, RunReferenceIntegrity, RunReferenceLocation,
+};
+
+/// Contract treasury liquidity reserve monitoring (#650).
+pub mod treasury_liquidity_reserve;
+pub use treasury_liquidity_reserve::{
+    LiquidityReserveError, LiquidityReserveKey, LiquidityReserveReport, LiquidityReserveStatus,
+    LiquidityReserveThresholds,
+};
+
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct ContractAddresses {
@@ -4506,6 +4530,10 @@ impl Payroll {
             panic!("Asset deprecated");
         }
 
+        // Issue #646: when the admin pinned a payment precision, the token
+        // must report the same decimals. No-op while unpinned.
+        payment_asset_compatibility::require_compatible_precision(&e, &addrs.token);
+
         // Issue #699: the funds this run will lock must be unreserved in the treasury.
         Self::require_reservable_treasury_balance(&e, &addrs, expected_total_spend);
 
@@ -6087,6 +6115,8 @@ impl Payroll {
         if draft.state != RunDraftState::Pending {
             panic!("Only pending drafts can be amended");
         }
+        // Issue #648: approved content is frozen while its snapshot is locked.
+        draft_approval_snapshot::require_snapshot_unlocked(&e, draft_id);
         // Issue #471: a frozen period cannot receive draft edits.
         Self::require_period_not_frozen(&e, &draft.period_label);
         // Issue #622: a correction request left untouched past the configured
@@ -9996,6 +10026,8 @@ impl Payroll {
         if required_approvals == 0 {
             panic!("required_approvals must be positive");
         }
+        // Issue #648: re-initializing would discard the locked approvals.
+        draft_approval_snapshot::require_snapshot_unlocked(&e, draft_id);
 
         let protected_content_hash = signing::compute_protected_content_hash(
             &e,
@@ -10096,6 +10128,9 @@ impl Payroll {
         if new_total_amount <= 0 {
             panic!("total_amount must be positive");
         }
+
+        // Issue #648: a locked snapshot must be released before revising.
+        draft_approval_snapshot::require_snapshot_unlocked(&e, draft_id);
 
         let mut approval: signing::MultiStageApproval = e
             .storage()
