@@ -562,3 +562,17 @@ The query is deliberately privacy-safe: it does not return employee identities,
 salary amounts, commitments, or payroll row data. Integrators should treat the
 revision as a change-detection pointer, not as a replacement for the payroll
 contract's approval workflow.
+
+
+## Issued auditor grants and cancellation events (#813, #818)
+
+Delegated auditor grants are bounded by the scope and expiry ceiling captured
+when the grant is issued. Extending an existing delegated grant beyond that
+ceiling returns GrantExpansionNotAllowed; revoke and issue a new grant when
+additional access is explicitly required. This keeps existing grants from
+silently acquiring broader or longer-lived access after issuance.
+
+Payroll cancellation events publish only the run ID and cancelling admin.
+Amounts, employee counts, draft hashes, and free-form cancellation reasons are
+kept out of the public event payload. Operational cancellation details remain
+available through the authorized cancellation-status record.
