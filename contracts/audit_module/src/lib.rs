@@ -667,6 +667,13 @@ impl AuditModule {
         if new_expiration_ledger <= record.expiration_ledger {
             return Err(AuditError::ExpirationNotExtended);
         }
+
+        // A delegated grant's issuance-time ceiling is immutable. Even if
+        // its parent later refreshes their own key, that must not silently
+        // enlarge a grant already issued to this delegate.
+        if new_expiration_ledger > record.max_expiration_ledger {
+            return Err(AuditError::DelegationExceedsParentExpiry);
+        }
         if new_expiration_ledger > parent.max_expiration_ledger
             || new_expiration_ledger > parent.expiration_ledger
         {
