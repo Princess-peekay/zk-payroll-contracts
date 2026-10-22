@@ -4902,11 +4902,9 @@ impl Payroll {
             &Self::pending_payroll_run_count(&e).saturating_sub(1),
         );
 
-        // Emit cancellation event with reason for audit trail
-        e.events().publish(
-            (symbol_short!("payroll"), Symbol::new(&e, "run_cancelled")),
-            (run_id, reason),
-        );
+        // Publish only operational metadata: never amounts, employee counts,
+        // draft hashes, or a caller-supplied free-form reason.
+        payroll_events::emit_run_cancelled(&e, run_id, admin.clone());
         Self::emit_treasury_balance_snapshot(&e, addrs.token, Symbol::new(&e, "run_cancelled"));
     }
 
