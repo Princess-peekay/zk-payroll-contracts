@@ -188,6 +188,19 @@ pub struct AdminConfigVersion {
     pub updated_by: Address,
 }
 
+/// Metadata for the latest approved payroll revision for a company.
+///
+/// This revision pointer contains no employee identities, salary amounts,
+/// commitments, or payroll row data.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LatestApprovedPayrollRevision {
+    pub company_id: u64,
+    pub revision: u64,
+    pub approved_at: u64,
+    pub approved_by: Address,
+}
+
 /// Storage key space for the payroll registry.
 ///
 /// - `Company(u64)`               ? `CompanyInfo`              (Persistent)
@@ -231,6 +244,8 @@ pub enum DataKey {
     /// Appended (never reordered) so existing storage discriminants are
     /// unchanged.
     PayoutMethodConfirmation(u64, Address),
+    /// Latest approved payroll revision metadata for a company (#864).
+    LatestApprovedPayrollRevision(u64),
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +483,22 @@ pub trait PayrollRegistryTrait {
     /// Returns None if the company does not exist. The version increments
     /// whenever admin or treasury configuration changes.
     fn get_admin_config_version(env: Env, company_id: u64) -> Option<AdminConfigVersion>;
+
+    /// Record a newly approved payroll revision for a company (#864).
+    /// Only the active company admin may record a strictly increasing, non-zero
+    /// revision number. The record stores metadata only.
+    fn record_approved_payroll_revision(
+        env: Env,
+        company_id: u64,
+        admin: Address,
+        revision: u64,
+    );
+
+    /// Return the latest approved payroll revision metadata, if any (#864).
+    fn get_latest_approved_payroll_revision(
+        env: Env,
+        company_id: u64,
+    ) -> Option<LatestApprovedPayrollRevision>;
 }
 
 // ---------------------------------------------------------------------------
@@ -1887,6 +1918,64 @@ impl PayrollRegistryTrait for PayrollRegistry {
             Some(confirmation) => confirmation.destination == current,
             None => false,
         }
+    }
+
+    /// Record a strictly increasing approved payroll revision (#864).
+    ///
+    /// Only the active company admin can update this pointer. The public
+    /// record intentionally contains revision metadata only, never payroll
+    /// rows, employee identifiers, salary amounts, or commitments.
+    pub fn record_approved_payroll_revision(
+        env: Env,
+        company_id: u64,
+        admin: Address,
+        revision: u64,
+    ) {
+        Self::require_not_paused(&env);
+        if revision == 0 {
+            panic!("Approved payroll revision must be greater than zero");
+        }
+        let company: CompanyInfo = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Company(company_id))
+            .expect("Company not found");
+        if company.revoked {
+            panic!("Company admin is revoked");
+        }
+        if company.admin != admin {
+            panic!("Only company admin can record an approved payroll revision");
+        }
+        admin.require_auth();
+
+        let key = DataKey::LatestApprovedPayrollRevision(company_id);
+        if let Some(current) = env
+            .storage()
+            .persistent()
+            .get::<_, LatestApprovedPayrollRevision>(&key)
+        {
+            if revision <= current.revision {
+                panic!("Approved payroll revision must increase monotonically");
+            }
+        }
+
+        let record = LatestApprovedPayrollRevision {
+            company_id,
+            revision,
+            approved_at: env.ledger().timestamp(),
+            approved_by: admin,
+        };
+        env.storage().persistent().set(&key, &record);
+    }
+
+    /// Read the latest approved payroll revision without exposing payroll rows.
+    pub fn get_latest_approved_payroll_revision(
+        env: Env,
+        company_id: u64,
+    ) -> Option<LatestApprovedPayrollRevision> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::LatestApprovedPayrollRevision(company_id))
     }
 }
 
