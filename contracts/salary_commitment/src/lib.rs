@@ -1759,4 +1759,41 @@ mod tests {
 
         client.set_employee_reference_id(&employee, &reference_id);
     }
+
+    /// Property-style uniqueness coverage over a bounded set of commitments.
+    /// Every distinct value can be registered once; collisions are rejected
+    /// across employees, including values archived by a later rotation.
+    #[test]
+    fn property_commitment_uniqueness_holds_across_generated_values() {
+        let (env, contract_id, _admin) = setup_with_admin();
+        let client = SalaryCommitmentContractClient::new(&env, &contract_id);
+        let mut employees = Vec::new(&env);
+
+        for i in 1u8..=64u8 {
+            let employee = Address::generate(&env);
+            let commitment = BytesN::from_array(&env, &[i; 32]);
+            client.store_commitment(&employee, &commitment);
+            employees.push_back(employee);
+            assert!(client.is_commitment_active(&employees.last().unwrap()));
+        }
+
+        // Collision at the upper boundary is rejected without changing the
+        // existing employee's commitment.
+        let last_employee = employees.last().unwrap();
+        let last_commitment = BytesN::from_array(&env, &[64u8; 32]);
+        let collision_employee = Address::generate(&env);
+        assert!(client
+            .try_store_commitment(&collision_employee, &last_commitment)
+            .is_err());
+        assert_eq!(client.get_commitment(&last_employee).commitment, last_commitment);
+
+        // Archived values remain reserved after rotation; uniqueness spans the
+        // complete commitment history, not only active records.
+        let first_employee = employees.get(0).unwrap();
+        let archived_commitment = BytesN::from_array(&env, &[1u8; 32]);
+        client.update_commitment(&first_employee, &BytesN::from_array(&env, &[65u8; 32]));
+        assert!(client
+            .try_store_commitment(&Address::generate(&env), &archived_commitment)
+            .is_err());
+    }
 }
